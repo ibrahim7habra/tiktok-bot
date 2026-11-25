@@ -1,49 +1,41 @@
+import os
 import telebot
 import yt_dlp
-import os
+import requests
 
-TOKEN = "9060575501:AAHBFRqcuHJAB2VLs4eJusprhl5L_FYpXc8"
-
+TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(TOKEN)
 
-@bot.message_handler(commands=['start'])
-def start(message):
-    bot.reply_to(message, "اهلا بيك 🎬\nابعتلي لينك من تيك توك او انستا او فيس او يوتيوب وانا احملهولك")
+@bot.message_handler(commands=['start','help'])
+def start(m):
+    bot.reply_to(m, "ابعت لينك TikTok او Facebook وانا احملهولك 🎥")
 
 @bot.message_handler(func=lambda m: True)
-def download(message):
-    url = message.text.strip()
-
-    if "http" not in url:
-        bot.reply_to(message, "ابعت لينك صحيح ❌")
+def download(m):
+    url = m.text.strip()
+    if "tiktok.com" not in url and "facebook.com" not in url and "fb.watch" not in url:
+        bot.reply_to(m, "ابعت لينك TikTok او Facebook صحيح")
         return
-
-    bot.reply_to(message, "بحمل الفيديو... استنى شوية ⏳")
-
+    bot.reply_to(m, "بحمل... استنى ثواني ⏳")
+    # محاولة سريعة للتيك توك من tikwm
+    if "tiktok.com" in url:
+        try:
+            r = requests.get(f"https://www.tikwm.com/api/?url={url}", timeout=20).json()
+            video = r.get("data", {}).get("play")
+            if video:
+                bot.send_video(m.chat.id, video)
+                return
+        except:
+            pass
+    # تحميل بـ yt-dlp
     try:
-        # امسح اي فيديو قديم
-        for f in os.listdir('.'):
-            if f.startswith('video.'):
-                os.remove(f)
-
-        ydl_opts = {
-            'format': 'best[ext=mp4]/best',
-            'outtmpl': 'video.%(ext)s',
-            'quiet': True,
-            'noplaylist': True,
-        }
+        ydl_opts = {'format': 'mp4', 'outtmpl': 'video.mp4', 'quiet': True, 'noplaylist': True}
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            title = info.get('title', 'الفيديو')
-
-        for file in os.listdir('.'):
-            if file.startswith('video.'):
-                with open(file, 'rb') as f:
-                    bot.send_video(message.chat.id, f, caption=title)
-                os.remove(file)
-                break
+            ydl.download([url])
+        with open('video.mp4','rb') as f:
+            bot.send_video(m.chat.id, f)
+        os.remove('video.mp4')
     except Exception as e:
-        bot.reply_to(message, f"مقدرتش احمل اللينك ده 😢\nحاول لينك تاني")
+        bot.reply_to(m, "مش عارف احمل الفيديو ده، جرب واحد تاني")
 
-print("Bot is running...")
 bot.polling()
